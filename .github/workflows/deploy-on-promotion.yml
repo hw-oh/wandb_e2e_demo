@@ -145,6 +145,7 @@ jobs:
           done
 
       - name: Log deployment event to W&B
+        continue-on-error: true
         env:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
         run: |
@@ -154,22 +155,25 @@ jobs:
           with open("artifact_info.json") as f:
               info = json.load(f)
 
-          run = wandb.init(
-              entity=info["entity"],
-              project=info["project"],
-              job_type="deployment",
-              name=f"deploy-{info['version']}",
-              config={
-                  "model_name": info["model_name"],
-                  "model_version": info["version"],
-                  "artifact_path": info["resolved_path"],
-                  "event_author": info.get("event_author", "unknown"),
-                  "trigger": "wandb-automation",
-                  "deployed_by": "github-actions",
-              },
-          )
-
-          wandb.log({"deployment_status": "success"})
-          wandb.finish()
-          print("Deployment event logged to W&B")
+          # registry entity가 org인 경우 run 로깅 불가 → 스킵
+          try:
+              run = wandb.init(
+                  entity=info["entity"],
+                  project=info["project"],
+                  job_type="deployment",
+                  name=f"deploy-{info['version']}",
+                  config={
+                      "model_name": info["model_name"],
+                      "model_version": info["version"],
+                      "artifact_path": info["resolved_path"],
+                      "event_author": info.get("event_author", "unknown"),
+                      "trigger": "wandb-automation",
+                      "deployed_by": "github-actions",
+                  },
+              )
+              wandb.log({"deployment_status": "success"})
+              wandb.finish()
+              print("Deployment event logged to W&B")
+          except Exception as e:
+              print(f"W&B logging skipped (non-critical): {e}")
           PYEOF
