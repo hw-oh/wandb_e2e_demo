@@ -2,5 +2,9 @@
   "model_name": "none",
   "model_version": "none",
   "artifact_path": "none",
-  "deployed_at": "not deployed"
+  "deployed_at": "not deployed",
+  "deployed_by": "none",
+  "model_type": "none",
+  "best_val_acc": null,
+  "trigger": "none"
 }

@@ -9,6 +9,15 @@ st.set_page_config(page_title="W&B Model Deployment Viewer", layout="wide")
 
 st.title("W&B Model Deployment Viewer")
 
+# --- WANDB_API_KEY 검증 ---
+if not os.environ.get("WANDB_API_KEY"):
+    st.error(
+        "WANDB_API_KEY가 설정되지 않았습니다. "
+        "Streamlit Cloud의 Secrets 설정에서 WANDB_API_KEY를 추가하세요."
+    )
+    st.code('WANDB_API_KEY = "your-wandb-api-key"', language="toml")
+    st.stop()
+
 # --- 배포 상태 로드 ---
 DEPLOY_PATH = os.path.join(os.path.dirname(__file__), "deployment.json")
 
@@ -22,19 +31,34 @@ with st.sidebar:
     st.header("설정")
     model_type = st.selectbox("모델 유형", ["Classification"])
     st.markdown("---")
-    st.markdown("[W&B Dashboard](https://wandb.ai)")
+    if is_deployed:
+        parts = deploy_info.get("artifact_path", "").split("/")
+        if len(parts) >= 2:
+            st.markdown(f"[W&B Project](https://wandb.ai/{parts[0]}/{parts[1]})")
+        else:
+            st.markdown("[W&B Dashboard](https://wandb.ai)")
+    else:
+        st.markdown("[W&B Dashboard](https://wandb.ai)")
 
 # --- 배포 상태 ---
 st.header("배포 상태")
 
 if not is_deployed:
-    st.warning("배포된 모델이 없습니다. automations 노트북에서 모델을 'production'으로 승격하세요.")
+    st.warning("배포된 모델이 없습니다. W&B Model Registry에서 모델을 'production'으로 승격하세요.")
     st.stop()
 
 col1, col2, col3 = st.columns(3)
 col1.metric("모델", deploy_info["model_name"])
 col2.metric("버전", deploy_info["model_version"])
 col3.metric("배포 시각", deploy_info["deployed_at"])
+
+col4, col5 = st.columns(2)
+model_type_val = deploy_info.get("model_type", "-")
+if model_type_val and model_type_val != "none":
+    col4.metric("모델 유형", model_type_val)
+best_acc = deploy_info.get("best_val_acc")
+if best_acc is not None:
+    col5.metric("Best Val Accuracy", f"{best_acc:.2%}")
 
 # --- 모델 정보 (W&B API) ---
 st.header("모델 정보")

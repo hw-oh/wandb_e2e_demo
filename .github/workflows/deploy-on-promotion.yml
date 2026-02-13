@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [wandb-model-promoted]
 
+concurrency:
+  group: model-deployment
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -21,38 +25,151 @@ jobs:
 
       - name: Parse webhook payload
         run: |
-          echo "MODEL_NAME=${{ github.event.client_payload.model_name }}" >> $GITHUB_ENV
-          echo "MODEL_VERSION=${{ github.event.client_payload.model_version }}" >> $GITHUB_ENV
-          echo "ARTIFACT_PATH=${{ github.event.client_payload.artifact_path }}" >> $GITHUB_ENV
+          cat << 'EOF' > payload.json
+          ${{ toJson(github.event.client_payload) }}
+          EOF
+          echo "Payload:"
+          cat payload.json
 
-      - name: Download and validate model
+      - name: Resolve artifact and extract metadata
         env:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
         run: |
-          python -c "
-          import wandb
+          python << 'PYEOF'
+          import wandb, sys, json, os
+
+          with open("payload.json") as f:
+              payload = json.load(f)
+
+          entity = payload.get("entity_name", "")
+          project = payload.get("project_name", "")
+          collection = payload.get("artifact_collection_name", "")
+          version_string = payload.get("artifact_version_string", "")
+          event_author = payload.get("event_author", "")
+
+          print(f"Entity: {entity}")
+          print(f"Project: {project}")
+          print(f"Collection: {collection}")
+          print(f"Version string: {version_string}")
+          print(f"Event author: {event_author}")
+
           api = wandb.Api()
-          artifact = api.artifact('${{ env.ARTIFACT_PATH }}')
-          artifact.download('./deployed_model')
-          print(f'Downloaded: {artifact.name} v{artifact.version}')
+
+          # artifact_version_string으로 먼저 시도,
+          # 실패하면 entity/project/collection:production 으로 재시도
+          artifact = None
+          attempts = [
+              version_string,
+              f"{entity}/{project}/{collection}:production",
+              f"{collection}:production",
+          ]
+
+          for path in attempts:
+              if not path or path.startswith(":"):
+                  continue
+              try:
+                  print(f"\nTrying: api.artifact('{path}')")
+                  artifact = api.artifact(path)
+                  print(f"Success! Resolved: {artifact.name} {artifact.version}")
+                  break
+              except Exception as e:
+                  print(f"Failed: {e}")
+
+          if artifact is None:
+              print("ERROR: Could not resolve artifact with any method")
+              sys.exit(1)
+
           metadata = artifact.metadata
-          print(f'Model type: {metadata.get(\"model_type\", \"unknown\")}')
-          print(f'Accuracy: {metadata.get(\"best_val_acc\", \"N/A\")}')
-          "
+          print(f"\nModel type: {metadata.get('model_type', 'unknown')}")
+          print(f"Accuracy: {metadata.get('best_val_acc', 'N/A')}")
+
+          # 실제 artifact 경로 (버전 고정)
+          resolved_path = f"{artifact.entity}/{artifact.project}/{artifact.name}:{artifact.version}"
+          print(f"Resolved path: {resolved_path}")
+
+          info = {
+              "model_name": collection,
+              "model_type": metadata.get("model_type", "unknown"),
+              "best_val_acc": metadata.get("best_val_acc"),
+              "num_classes": metadata.get("num_classes"),
+              "resolved_path": resolved_path,
+              "version": artifact.version,
+              "event_author": event_author,
+              "entity": artifact.entity,
+              "project": artifact.project,
+          }
+
+          with open("artifact_info.json", "w") as f:
+              json.dump(info, f)
+          PYEOF
 
       - name: Update deployment manifest
         run: |
-          echo '{
-            "model_name": "${{ env.MODEL_NAME }}",
-            "model_version": "${{ env.MODEL_VERSION }}",
-            "artifact_path": "${{ env.ARTIFACT_PATH }}",
-            "deployed_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-          }' > models/app/deployment.json
+          python << 'PYEOF'
+          import json, datetime
+
+          with open("artifact_info.json") as f:
+              info = json.load(f)
+
+          manifest = {
+              "model_name": info["model_name"],
+              "model_version": info["version"],
+              "artifact_path": info["resolved_path"],
+              "deployed_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "deployed_by": "github-actions",
+              "model_type": info.get("model_type", "unknown"),
+              "best_val_acc": info.get("best_val_acc"),
+              "trigger": "wandb-automation",
+          }
+
+          with open("models/app/deployment.json", "w") as f:
+              json.dump(manifest, f, indent=2)
+              f.write("\n")
+
+          print(json.dumps(manifest, indent=2))
+          PYEOF
 
       - name: Commit and push deployment update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add models/app/deployment.json
-          git commit -m "deploy: ${{ env.MODEL_NAME }} ${{ env.MODEL_VERSION }}"
-          git push
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          MODEL_VERSION=$(python -c "import json; print(json.load(open('artifact_info.json'))['version'])")
+          MODEL_NAME=$(python -c "import json; print(json.load(open('artifact_info.json'))['model_name'])")
+          git commit -m "deploy: ${MODEL_NAME} ${MODEL_VERSION}"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && break
+            echo "Push attempt $i failed, retrying..."
+            sleep 5
+          done
+
+      - name: Log deployment event to W&B
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          python << 'PYEOF'
+          import wandb, json
+
+          with open("artifact_info.json") as f:
+              info = json.load(f)
+
+          run = wandb.init(
+              entity=info["entity"],
+              project=info["project"],
+              job_type="deployment",
+              name=f"deploy-{info['version']}",
+              config={
+                  "model_name": info["model_name"],
+                  "model_version": info["version"],
+                  "artifact_path": info["resolved_path"],
+                  "event_author": info.get("event_author", "unknown"),
+                  "trigger": "wandb-automation",
+                  "deployed_by": "github-actions",
+              },
+          )
+
+          wandb.log({"deployment_status": "success"})
+          wandb.finish()
+          print("Deployment event logged to W&B")
+          PYEOF
