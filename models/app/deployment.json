@@ -1,10 +1,10 @@
 {
-  "model_name": "cifar10-classifier",
+  "model_name": "e2e-cifar10-classifier",
   "model_version": "v0",
-  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/cifar10-classifier:v0:v0",
-  "deployed_at": "2026-02-13T09:25:55Z",
+  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/e2e-cifar10-classifier:v0:v0",
+  "deployed_at": "2026-02-13T09:27:44Z",
   "deployed_by": "github-actions",
   "model_type": "classification",
-  "best_val_acc": 92.19,
+  "best_val_acc": 92.24,
   "trigger": "wandb-automation"
 }
