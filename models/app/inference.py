@@ -23,10 +23,14 @@ def run_inference(model, uploaded_file, metadata: dict) -> dict:
 
 
 def _classify(model, image: Image.Image, metadata: dict) -> dict:
-    """CIFAR-10 classification 추론."""
+    """CIFAR-10 classification 추론. 전처리 단계별 시각화 포함."""
     classes = metadata.get("classes", [f"Class {i}" for i in range(10)])
     input_size = metadata.get("input_size", [3, 32, 32])
     h, w = input_size[1], input_size[2]
+
+    # 전처리 단계별 시각화용 이미지 저장
+    original_image = image.copy()
+    resized_image = image.resize((h, w), Image.BILINEAR)
 
     transform = transforms.Compose([
         transforms.Resize((h, w)),
@@ -36,7 +40,8 @@ def _classify(model, image: Image.Image, metadata: dict) -> dict:
 
     model.eval()
     with torch.no_grad():
-        output = model(transform(image).unsqueeze(0))
+        input_tensor = transform(image)
+        output = model(input_tensor.unsqueeze(0))
         probs = torch.softmax(output, dim=1)[0]
         top5 = torch.topk(probs, min(5, len(classes)))
 
@@ -46,7 +51,9 @@ def _classify(model, image: Image.Image, metadata: dict) -> dict:
     }
 
     return {
-        "visualization": image,
+        "original_image": original_image,
+        "resized_image": resized_image,
+        "input_size": (h, w),
         "predictions": predictions,
         "top_class": classes[top5.indices[0].item()],
         "top_confidence": top5.values[0].item(),

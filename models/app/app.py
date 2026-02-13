@@ -88,23 +88,44 @@ except Exception as e:
 
 # --- 추론 테스트 ---
 st.header("추론 테스트")
-uploaded = st.file_uploader("이미지를 업로드하세요", type=["jpg", "png", "jpeg"])
+uploaded = st.file_uploader("이미지를 업로드하세요 (어떤 크기든 가능)", type=["jpg", "png", "jpeg"])
 
 if uploaded:
     try:
         model, metadata = load_production_model(deploy_info["artifact_path"])
         result = run_inference(model, uploaded, metadata)
 
-        col_in, col_out = st.columns(2)
-        with col_in:
-            st.image(uploaded, caption="입력 이미지", use_container_width=True)
-        with col_out:
-            st.subheader(f"예측: {result['top_class']}")
-            st.write(f"신뢰도: {result['top_confidence']:.2%}")
-            st.markdown("---")
-            st.write("**Top-5 예측:**")
-            for cls, prob in result["predictions"].items():
-                st.write(f"- {cls}: {prob}")
+        # 전처리 파이프라인 시각화
+        st.subheader("전처리 파이프라인")
+        h, w = result["input_size"]
+
+        col_orig, col_arrow1, col_resized, col_arrow2, col_result = st.columns([3, 1, 2, 1, 3])
+
+        with col_orig:
+            orig = result["original_image"]
+            st.image(orig, caption=f"원본 ({orig.width}x{orig.height})", use_container_width=True)
+
+        with col_arrow1:
+            st.markdown("<div style='text-align:center; padding-top:50%; font-size:2rem;'>→</div>", unsafe_allow_html=True)
+            st.caption(f"Resize to {h}x{w}")
+
+        with col_resized:
+            st.image(result["resized_image"], caption=f"리사이즈 ({h}x{w})", use_container_width=True)
+
+        with col_arrow2:
+            st.markdown("<div style='text-align:center; padding-top:50%; font-size:2rem;'>→</div>", unsafe_allow_html=True)
+            st.caption("Normalize")
+
+        with col_result:
+            st.metric("예측", result["top_class"])
+            st.metric("신뢰도", f"{result['top_confidence']:.2%}")
+
+        # Top-5 예측 결과
+        st.subheader("Top-5 예측")
+        for cls, prob in result["predictions"].items():
+            prob_float = float(prob.strip("%")) / 100
+            st.progress(prob_float, text=f"{cls}: {prob}")
+
     except Exception as e:
         st.error(f"추론 오류: {e}")
 
