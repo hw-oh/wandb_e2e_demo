@@ -1,0 +1,58 @@
+name: Deploy Model on Production Promotion
+
+on:
+  repository_dispatch:
+    types: [wandb-model-promoted]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install wandb
+
+      - name: Parse webhook payload
+        run: |
+          echo "MODEL_NAME=${{ github.event.client_payload.model_name }}" >> $GITHUB_ENV
+          echo "MODEL_VERSION=${{ github.event.client_payload.model_version }}" >> $GITHUB_ENV
+          echo "ARTIFACT_PATH=${{ github.event.client_payload.artifact_path }}" >> $GITHUB_ENV
+
+      - name: Download and validate model
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          python -c "
+          import wandb
+          api = wandb.Api()
+          artifact = api.artifact('${{ env.ARTIFACT_PATH }}')
+          artifact.download('./deployed_model')
+          print(f'Downloaded: {artifact.name} v{artifact.version}')
+          metadata = artifact.metadata
+          print(f'Model type: {metadata.get(\"model_type\", \"unknown\")}')
+          print(f'Accuracy: {metadata.get(\"best_val_acc\", \"N/A\")}')
+          "
+
+      - name: Update deployment manifest
+        run: |
+          echo '{
+            "model_name": "${{ env.MODEL_NAME }}",
+            "model_version": "${{ env.MODEL_VERSION }}",
+            "artifact_path": "${{ env.ARTIFACT_PATH }}",
+            "deployed_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+          }' > models/app/deployment.json
+
+      - name: Commit and push deployment update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add models/app/deployment.json
+          git commit -m "deploy: ${{ env.MODEL_NAME }} ${{ env.MODEL_VERSION }}"
+          git push

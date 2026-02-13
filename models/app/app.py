@@ -1,0 +1,104 @@
+import json
+import os
+import streamlit as st
+import wandb
+from model_loader import load_production_model
+from inference import run_inference
+
+st.set_page_config(page_title="W&B Model Deployment Viewer", layout="wide")
+
+st.title("W&B Model Deployment Viewer")
+
+# --- 배포 상태 로드 ---
+DEPLOY_PATH = os.path.join(os.path.dirname(__file__), "deployment.json")
+
+with open(DEPLOY_PATH) as f:
+    deploy_info = json.load(f)
+
+is_deployed = deploy_info.get("model_name", "none") != "none"
+
+# --- 사이드바 ---
+with st.sidebar:
+    st.header("설정")
+    model_type = st.selectbox("모델 유형", ["Classification"])
+    st.markdown("---")
+    st.markdown("[W&B Dashboard](https://wandb.ai)")
+
+# --- 배포 상태 ---
+st.header("배포 상태")
+
+if not is_deployed:
+    st.warning("배포된 모델이 없습니다. automations 노트북에서 모델을 'production'으로 승격하세요.")
+    st.stop()
+
+col1, col2, col3 = st.columns(3)
+col1.metric("모델", deploy_info["model_name"])
+col2.metric("버전", deploy_info["model_version"])
+col3.metric("배포 시각", deploy_info["deployed_at"])
+
+# --- 모델 정보 (W&B API) ---
+st.header("모델 정보")
+
+try:
+    api = wandb.Api()
+    artifact = api.artifact(deploy_info["artifact_path"])
+
+    # 메타데이터 표시
+    col_meta1, col_meta2 = st.columns(2)
+    with col_meta1:
+        st.subheader("메타데이터")
+        st.json(artifact.metadata)
+
+    # 학습 run에서 메트릭 조회
+    with col_meta2:
+        st.subheader("학습 메트릭")
+        run = artifact.logged_by()
+        if run:
+            metrics = {k: v for k, v in run.summary.items() if not k.startswith("_")}
+            st.json(metrics)
+        else:
+            st.info("학습 run 정보를 찾을 수 없습니다.")
+except Exception as e:
+    st.error(f"W&B API 오류: {e}")
+    st.info("WANDB_API_KEY 환경변수가 설정되어 있는지 확인하세요.")
+
+# --- 추론 테스트 ---
+st.header("추론 테스트")
+uploaded = st.file_uploader("이미지를 업로드하세요", type=["jpg", "png", "jpeg"])
+
+if uploaded:
+    try:
+        model, metadata = load_production_model(deploy_info["artifact_path"])
+        result = run_inference(model, uploaded, metadata)
+
+        col_in, col_out = st.columns(2)
+        with col_in:
+            st.image(uploaded, caption="입력 이미지", use_container_width=True)
+        with col_out:
+            st.subheader(f"예측: {result['top_class']}")
+            st.write(f"신뢰도: {result['top_confidence']:.2%}")
+            st.markdown("---")
+            st.write("**Top-5 예측:**")
+            for cls, prob in result["predictions"].items():
+                st.write(f"- {cls}: {prob}")
+    except Exception as e:
+        st.error(f"추론 오류: {e}")
+
+# --- 버전 이력 ---
+st.header("버전 이력")
+
+try:
+    versions = artifact.collection.versions()
+    history = []
+    for v in versions:
+        history.append({
+            "버전": v.version,
+            "Aliases": ", ".join(v.aliases) if v.aliases else "-",
+            "등록 시각": str(v.created_at),
+        })
+    if history:
+        st.dataframe(history, use_container_width=True)
+    else:
+        st.info("버전 이력이 없습니다.")
+except Exception as e:
+    st.warning(f"버전 이력을 불러올 수 없습니다: {e}")
