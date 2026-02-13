@@ -84,7 +84,9 @@ jobs:
           print(f"Accuracy: {metadata.get('best_val_acc', 'N/A')}")
 
           # 실제 artifact 경로 (버전 고정)
-          resolved_path = f"{artifact.entity}/{artifact.project}/{artifact.name}:{artifact.version}"
+          # artifact.name이 "name:v0" 형식일 수 있으므로 버전 부분 제거
+          artifact_name = artifact.name.split(":")[0]
+          resolved_path = f"{artifact.entity}/{artifact.project}/{artifact_name}:{artifact.version}"
           print(f"Resolved path: {resolved_path}")
 
           info = {
@@ -143,37 +145,3 @@ jobs:
             echo "Push attempt $i failed, retrying..."
             sleep 5
           done
-
-      - name: Log deployment event to W&B
-        continue-on-error: true
-        env:
-          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-        run: |
-          python << 'PYEOF'
-          import wandb, json
-
-          with open("artifact_info.json") as f:
-              info = json.load(f)
-
-          # registry entity가 org인 경우 run 로깅 불가 → 스킵
-          try:
-              run = wandb.init(
-                  entity=info["entity"],
-                  project=info["project"],
-                  job_type="deployment",
-                  name=f"deploy-{info['version']}",
-                  config={
-                      "model_name": info["model_name"],
-                      "model_version": info["version"],
-                      "artifact_path": info["resolved_path"],
-                      "event_author": info.get("event_author", "unknown"),
-                      "trigger": "wandb-automation",
-                      "deployed_by": "github-actions",
-                  },
-              )
-              wandb.log({"deployment_status": "success"})
-              wandb.finish()
-              print("Deployment event logged to W&B")
-          except Exception as e:
-              print(f"W&B logging skipped (non-critical): {e}")
-          PYEOF
