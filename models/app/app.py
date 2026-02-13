@@ -60,31 +60,10 @@ best_acc = deploy_info.get("best_val_acc")
 if best_acc is not None:
     col5.metric("Best Val Accuracy", f"{best_acc:.2%}")
 
-# --- 모델 정보 (W&B API) ---
-st.header("모델 정보")
-
-try:
-    api = wandb.Api()
-    artifact = api.artifact(deploy_info["artifact_path"])
-
-    # 메타데이터 표시
-    col_meta1, col_meta2 = st.columns(2)
-    with col_meta1:
-        st.subheader("메타데이터")
-        st.json(artifact.metadata)
-
-    # 학습 run에서 메트릭 조회
-    with col_meta2:
-        st.subheader("학습 메트릭")
-        run = artifact.logged_by()
-        if run:
-            metrics = {k: v for k, v in run.summary.items() if not k.startswith("_")}
-            st.json(metrics)
-        else:
-            st.info("학습 run 정보를 찾을 수 없습니다.")
-except Exception as e:
-    st.error(f"W&B API 오류: {e}")
-    st.info("WANDB_API_KEY 환경변수가 설정되어 있는지 확인하세요.")
+# Registry 경로
+artifact_path = deploy_info.get("artifact_path", "")
+if artifact_path and artifact_path != "none":
+    st.code(artifact_path, language=None)
 
 # --- 추론 테스트 ---
 st.header("추론 테스트")
@@ -133,6 +112,8 @@ if uploaded:
 st.header("버전 이력")
 
 try:
+    api = wandb.Api()
+    artifact = api.artifact(deploy_info["artifact_path"])
     versions = artifact.collection.versions()
     history = []
     for v in versions:
