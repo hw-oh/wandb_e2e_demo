@@ -121,7 +121,13 @@ Streamlit Cloud → App → **Settings → Secrets**
 
 ```toml
 WANDB_API_KEY = "your-wandb-api-key"
+WANDB_ORG = "your-wandb-org-name"
 ```
+
+| Secret | 설명 | 예시 |
+|---|---|---|
+| `WANDB_API_KEY` | W&B API 키 | `abc123...` |
+| `WANDB_ORG` | W&B Organization 이름 (Registry 링크용) | `wandb` |
 
 Streamlit Cloud는 Secrets를 환경변수로 자동 주입합니다.
 

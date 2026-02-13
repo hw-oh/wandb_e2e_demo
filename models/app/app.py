@@ -1,5 +1,6 @@
 import json
 import os
+from urllib.parse import quote
 import streamlit as st
 import wandb
 from model_loader import load_production_model
@@ -60,10 +61,25 @@ best_acc = deploy_info.get("best_val_acc")
 if best_acc is not None:
     col5.metric("Best Val Accuracy", f"{best_acc:.2%}")
 
-# Registry 경로
+# Registry 링크
 artifact_path = deploy_info.get("artifact_path", "")
 if artifact_path and artifact_path != "none":
-    st.code(artifact_path, language=None)
+    parts = artifact_path.split("/")
+    if len(parts) == 3 and ":" in parts[2]:
+        entity = parts[0]
+        project = parts[1]
+        collection, version = parts[2].rsplit(":", 1)
+        registry_name = project.removeprefix("wandb-registry-")
+        org = os.environ.get("WANDB_ORG", entity)
+        selection_path = f"{entity}/{project}/{collection}"
+        registry_url = (
+            f"https://wandb.ai/orgs/{quote(org)}/registry/{quote(registry_name)}"
+            f"?selectionPath={quote(selection_path, safe='')}"
+            f"&view=membership&tab=overview&version={version}"
+        )
+        st.markdown(f"[W&B Registry에서 보기 — {collection}:{version}]({registry_url})")
+    else:
+        st.code(artifact_path, language=None)
 
 # --- 추론 테스트 ---
 st.header("추론 테스트")
