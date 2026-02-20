@@ -30,7 +30,7 @@ is_deployed = deploy_info.get("model_name", "none") != "none"
 # --- 사이드바 ---
 with st.sidebar:
     st.header("설정")
-    model_type = st.selectbox("모델 유형", ["Classification"])
+    model_type = st.selectbox("모델 유형", ["Classification", "Segmentation"])
     st.markdown("---")
     if is_deployed:
         parts = deploy_info.get("artifact_path", "").split("/")
@@ -58,8 +58,11 @@ model_type_val = deploy_info.get("model_type", "-")
 if model_type_val and model_type_val != "none":
     col4.metric("모델 유형", model_type_val)
 best_acc = deploy_info.get("best_val_acc")
+best_iou = deploy_info.get("best_mean_iou")
 if best_acc is not None:
     col5.metric("Best Val Accuracy", f"{best_acc:.2%}")
+elif best_iou is not None:
+    col5.metric("Best Mean IoU", f"{best_iou:.4f}")
 
 # Registry 링크
 artifact_path = deploy_info.get("artifact_path", "")
@@ -89,37 +92,54 @@ if uploaded:
     try:
         model, metadata = load_production_model(deploy_info["artifact_path"])
         result = run_inference(model, uploaded, metadata)
+        current_model_type = metadata.get("model_type", "classification")
 
-        # 전처리 파이프라인 시각화
-        st.subheader("전처리 파이프라인")
-        h, w = result["input_size"]
+        if current_model_type == "classification":
+            st.subheader("전처리 파이프라인")
+            h, w = result["input_size"]
 
-        col_orig, col_arrow1, col_resized, col_arrow2, col_result = st.columns([3, 1, 2, 1, 3])
+            col_orig, col_arrow1, col_resized, col_arrow2, col_result = st.columns([3, 1, 2, 1, 3])
 
-        with col_orig:
-            orig = result["original_image"]
-            st.image(orig, caption=f"원본 ({orig.width}x{orig.height})", use_container_width=True)
+            with col_orig:
+                orig = result["original_image"]
+                st.image(orig, caption=f"원본 ({orig.width}x{orig.height})", use_container_width=True)
 
-        with col_arrow1:
-            st.markdown("<div style='text-align:center; padding-top:50%; font-size:2rem;'>→</div>", unsafe_allow_html=True)
-            st.caption(f"Resize to {h}x{w}")
+            with col_arrow1:
+                st.markdown("<div style='text-align:center; padding-top:50%; font-size:2rem;'>→</div>", unsafe_allow_html=True)
+                st.caption(f"Resize to {h}x{w}")
 
-        with col_resized:
-            st.image(result["resized_image"], caption=f"리사이즈 ({h}x{w})", use_container_width=True)
+            with col_resized:
+                st.image(result["resized_image"], caption=f"리사이즈 ({h}x{w})", use_container_width=True)
 
-        with col_arrow2:
-            st.markdown("<div style='text-align:center; padding-top:50%; font-size:2rem;'>→</div>", unsafe_allow_html=True)
-            st.caption("Normalize")
+            with col_arrow2:
+                st.markdown("<div style='text-align:center; padding-top:50%; font-size:2rem;'>→</div>", unsafe_allow_html=True)
+                st.caption("Normalize")
 
-        with col_result:
-            st.metric("예측", result["top_class"])
-            st.metric("신뢰도", f"{result['top_confidence']:.2%}")
+            with col_result:
+                st.metric("예측", result["top_class"])
+                st.metric("신뢰도", f"{result['top_confidence']:.2%}")
 
-        # Top-5 예측 결과
-        st.subheader("Top-5 예측")
-        for cls, prob in result["predictions"].items():
-            prob_float = float(prob.strip("%")) / 100
-            st.progress(prob_float, text=f"{cls}: {prob}")
+            st.subheader("Top-5 예측")
+            for cls, prob in result["predictions"].items():
+                prob_float = float(prob.strip("%")) / 100
+                st.progress(prob_float, text=f"{cls}: {prob}")
+
+        elif current_model_type == "segmentation":
+            st.subheader("세그멘테이션 결과")
+
+            col_orig, col_overlay, col_mask = st.columns(3)
+            with col_orig:
+                orig = result["original_image"]
+                st.image(orig, caption=f"원본 ({orig.width}x{orig.height})", use_container_width=True)
+            with col_overlay:
+                st.image(result["overlay_image"], caption="마스크 오버레이", use_container_width=True)
+            with col_mask:
+                st.image(result["mask_image"], caption="세그멘테이션 마스크", use_container_width=True)
+
+            st.subheader("클래스별 픽셀 비율")
+            for cls_name, ratio in result["class_ratios"].items():
+                ratio_float = float(ratio.strip("%")) / 100
+                st.progress(ratio_float, text=f"{cls_name}: {ratio}")
 
     except Exception as e:
         st.error(f"추론 오류: {e}")
