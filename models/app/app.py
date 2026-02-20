@@ -30,7 +30,7 @@ is_deployed = deploy_info.get("model_name", "none") != "none"
 # --- 사이드바 ---
 with st.sidebar:
     st.header("설정")
-    model_type = st.selectbox("모델 유형", ["Classification", "Segmentation"])
+    model_type = st.selectbox("모델 유형", ["Classification", "Segmentation", "Detection"])
     st.markdown("---")
     if is_deployed:
         parts = deploy_info.get("artifact_path", "").split("/")
@@ -59,10 +59,13 @@ if model_type_val and model_type_val != "none":
     col4.metric("모델 유형", model_type_val)
 best_acc = deploy_info.get("best_val_acc")
 best_iou = deploy_info.get("best_mean_iou")
+best_map50 = deploy_info.get("best_mAP50")
 if best_acc is not None:
     col5.metric("Best Val Accuracy", f"{best_acc:.2%}")
 elif best_iou is not None:
     col5.metric("Best Mean IoU", f"{best_iou:.4f}")
+elif best_map50 is not None:
+    col5.metric("Best mAP@0.5", f"{best_map50:.4f}")
 
 # Registry 링크
 artifact_path = deploy_info.get("artifact_path", "")
@@ -140,6 +143,21 @@ if uploaded:
             for cls_name, ratio in result["class_ratios"].items():
                 ratio_float = float(ratio.strip("%")) / 100
                 st.progress(ratio_float, text=f"{cls_name}: {ratio}")
+
+        elif current_model_type == "detection":
+            st.subheader("객체 탐지 결과")
+
+            col_orig, col_result = st.columns(2)
+            with col_orig:
+                st.image(result["original_image"], caption="원본", use_container_width=True)
+            with col_result:
+                st.image(result["result_image"], caption=f"탐지 결과 ({result['num_objects']}개 객체)", use_container_width=True)
+
+            if result["detections"]:
+                st.subheader(f"검출된 객체 ({result['num_objects']}개)")
+                st.dataframe(result["detections"], use_container_width=True)
+            else:
+                st.info("검출된 객체가 없습니다.")
 
     except Exception as e:
         st.error(f"추론 오류: {e}")

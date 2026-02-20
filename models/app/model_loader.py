@@ -57,6 +57,9 @@ def load_production_model(artifact_path: str):
             torch.load(f"{artifact_dir}/model.pth", map_location="cpu", weights_only=True)
         )
         model.eval()
+    elif model_type == "detection":
+        from ultralytics import YOLO
+        model = YOLO(f"{artifact_dir}/best.pt")
     else:
         raise NotImplementedError(f"Model type '{model_type}' is not yet supported.")
 

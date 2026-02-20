@@ -26,7 +26,7 @@ def run_inference(model, uploaded_file, metadata: dict) -> dict:
     elif model_type == "segmentation":
         return _segment(model, image, metadata)
     elif model_type == "detection":
-        raise NotImplementedError("Detection inference는 아직 구현되지 않았습니다.")
+        return _detect(model, image, metadata)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -120,4 +120,30 @@ def _segment(model, image: Image.Image, metadata: dict) -> dict:
         "input_size": (h, w),
         "class_ratios": class_ratios,
         "classes": classes,
+    }
+
+
+def _detect(model, image: Image.Image, metadata: dict) -> dict:
+    """YOLOv8 detection 추론. Ultralytics 내장 시각화 활용."""
+    classes = metadata.get("classes", [])
+
+    results = model(image, verbose=False)
+    r = results[0]
+
+    plotted = Image.fromarray(r.plot()[..., ::-1])  # BGR -> RGB
+
+    detections = []
+    for box in r.boxes:
+        cls_id = int(box.cls)
+        cls_name = classes[cls_id] if cls_id < len(classes) else str(cls_id)
+        detections.append({
+            "class": cls_name,
+            "confidence": f"{float(box.conf):.2%}",
+        })
+
+    return {
+        "original_image": image,
+        "result_image": plotted,
+        "detections": detections,
+        "num_objects": len(r.boxes),
     }
