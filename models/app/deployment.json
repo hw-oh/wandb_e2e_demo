@@ -1,12 +1,12 @@
 {
   "model_name": "pet-segmenter",
-  "model_version": "v3",
-  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/pet-segmenter:v3",
-  "deployed_at": "2026-02-20T09:44:47Z",
+  "model_version": "v2",
+  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/pet-segmenter:v2",
+  "deployed_at": "2026-02-20T10:26:20Z",
   "deployed_by": "github-actions",
   "model_type": "segmentation",
   "best_val_acc": null,
-  "best_mean_iou": null,
+  "best_mean_iou": 0.0,
   "best_mAP50": null,
   "trigger": "wandb-automation"
 }
