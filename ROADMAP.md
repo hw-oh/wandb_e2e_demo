@@ -10,7 +10,7 @@ W&B E2E Demo 구현 로드맵. 각 시나리오를 순서대로 구현한다.
 
 ### 왜 첫 번째인가
 
-가장 기본적인 CV 태스크로, W&B의 핵심 기능(Tracking, Artifacts, Sweep, Registry, Tables, Reports)을 자연스럽게 전부 보여줄 수 있다. 이후 시나리오들의 템플릿 역할을 한다.
+가장 기본적인 CV 태스크로, W&B의 핵심 기능(Tracking, Artifacts, Sweep, Registry, Tables, Reports, **Automations**)을 자연스럽게 전부 보여줄 수 있다. 이후 시나리오들의 템플릿 역할을 한다. Automations(자동 배포) 코드도 이 노트북 안에 포함하여 **하나의 노트북으로 학습→배포까지 풀 플로우**를 커버한다.
 
 ### 데이터셋
 
@@ -30,8 +30,9 @@ W&B E2E Demo 구현 로드맵. 각 시나리오를 순서대로 구현한다.
 
 | # | 셀 종류 | 내용 |
 |---|---------|------|
-| 1 | Code | `!pip install wandb torchvision` |
-| 2 | Code | `wandb.login()` |
+| 0 | Markdown | Open in Colab 배지 (GitHub → Colab 원클릭 실행) |
+| 1 | Code | `!pip install wandb torchvision wandb-workspaces requests` |
+| 2 | Code | `wandb.login()` + Colab Secrets 로드 (WANDB_*, GITHUB_PAT, GITHUB_REPO) |
 | 3 | Markdown | 프로젝트 소개 (한국어) |
 | 4 | Code | Config 정의 (`batch_size`, `lr`, `epochs`, `optimizer` 등) |
 | 5 | Code | 데이터 로드 + Transform 정의 + DataLoader 생성 |
@@ -42,9 +43,17 @@ W&B E2E Demo 구현 로드맵. 각 시나리오를 순서대로 구현한다.
 | 10 | Code | 검증 결과를 `wandb.Table`로 로깅 — 이미지, 정답, 예측, confidence |
 | 11 | Code | **모델 Artifact 저장** — `wandb.Artifact("resnet18-cifar10", type="model")` + `artifact.add_file("model.pth")` |
 | 12 | Code | **Model Registry 등록** — `run.link_artifact(artifact, "model-registry/cifar10-classifier", aliases=["staging"])` |
-| 13 | Code | **Sweep 설정 및 실행** — lr, batch_size, optimizer를 sweep |
-| 14 | Code | **Report 생성** — `wandb.apis.reports`로 실험 비교 리포트 자동 생성 |
-| 15 | Code | `wandb.finish()` |
+| 13 | Markdown | Sweep 소개 |
+| 14 | Code | **Sweep 설정 및 실행** — lr, batch_size, optimizer를 sweep |
+| 15 | Code | **Report 생성** — `wandb_workspaces.reports`로 실험 비교 리포트 자동 생성 |
+| 16 | Code | `wandb.finish()` |
+| 17 | Markdown | **Automations 섹션** — 자동 배포 파이프라인 아키텍처 + 사전 준비 가이드 |
+| 18 | Code | **Registry 현황 조회** — 등록된 모델/버전/alias 확인 |
+| 19 | Code | **"production" 승격 실행** — W&B Automation이 GitHub Actions Webhook 트리거 |
+| 20 | Code | **GitHub Actions 실행 상태 확인** — 워크플로우 실행 여부 조회 |
+| 21 | Code | **배포 상태 확인** — deployment.json 조회로 Streamlit 앱 배포 상태 확인 |
+| 22 | Markdown | **롤백 가이드** — 이전 버전으로 되돌리는 방법 |
+| 23 | Code | **롤백 실행 예시** (주석 처리) |
 
 #### Sweep Config
 
@@ -69,6 +78,7 @@ sweep_config = {
 - [x] Model Registry (staging alias로 등록)
 - [x] Sweeps (하이퍼파라미터 최적화)
 - [x] Reports (프로그래밍 방식 리포트 생성)
+- [x] Automations (production 승격 → Webhook → GitHub Actions → Streamlit 자동 배포)
 
 ---
 
@@ -436,27 +446,35 @@ if step % 100 == 0:
 
 ## 7-8. Automations + Streamlit 배포 (GitHub Actions 연동)
 
-> 7(Automations)과 8(Streamlit App)은 하나의 파이프라인으로 함께 구현한다.
+> Automations(승격/배포) 코드는 **각 유스케이스 노트북에 통합**되어 있다.
+> 별도의 `automations.ipynb`도 유지하지만, 하나의 노트북으로 풀 플로우 데모가 가능하다.
 
 ### 전체 아키텍처
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐     ┌──────────────────┐
-│  Notebook   │     │  W&B Model       │     │  GitHub Actions     │     │  Streamlit       │
-│  (Colab)    │────▶│  Registry        │────▶│  Workflow           │────▶│  Cloud           │
-│             │     │                  │     │                     │     │                  │
+│  각 유스케이스│     │  W&B Model       │     │  GitHub Actions     │     │  Streamlit       │
+│  노트북     │────▶│  Registry        │────▶│  Workflow           │────▶│  Cloud           │
+│  (Colab)    │     │                  │     │                     │     │                  │
 │ 학습 완료   │     │ "production"     │     │ 모델 다운로드       │     │ 새 모델로 서빙   │
 │ → 모델 등록 │     │ alias 승격 시    │     │ → 앱 재배포         │     │ → 추론 테스트    │
 │ → 승격      │     │ Webhook 발동     │     │                     │     │                  │
 └─────────────┘     └──────────────────┘     └─────────────────────┘     └──────────────────┘
 ```
 
+### 구조 설명
+
+각 유스케이스 노트북(1~6)은 학습 → 실험 추적 → Model Registry 등록까지 수행한 뒤,
+**노트북 하단 Automations 섹션**에서 "production" 승격 → 배포 파이프라인 확인 → 롤백까지 수행한다.
+
+별도의 `models/automations/automations.ipynb`도 유지하여, 여러 모델을 한곳에서 비교/승격하는 허브 역할도 가능하다.
+
 ### 파일 구조
 
 ```
 models/
 ├── automations/
-│   └── automations.ipynb                  # 모델 승격 + Automation 설정 가이드
+│   └── automations.ipynb                  # (선택) 모델 비교/승격 전용 허브 노트북
 ├── app/
 │   ├── app.py                             # Streamlit 메인 앱
 │   ├── model_loader.py                    # W&B Artifact → 모델 로드 유틸
@@ -566,28 +584,22 @@ W&B UI에서 설정:
 
 ---
 
-### Part B: Automations 노트북
+### Part B: 각 노트북의 Automations 섹션 (통합 방식)
 
-> **경로**: `models/automations/automations.ipynb`
+> 각 유스케이스 노트북(1~6)의 **하단**에 Automations 셀들이 포함되어 있다.
+> 별도의 `models/automations/automations.ipynb`도 여러 모델 비교/승격 허브로 유지한다.
 
-Colab에서 실행. Model Registry 승격을 트리거하고, 파이프라인 동작을 확인한다.
+#### 각 노트북 하단에 포함된 Automations 셀
 
-#### 셀 구성
-
-| # | 셀 종류 | 내용 |
-|---|---------|------|
-| 1 | Code | `!pip install wandb` |
-| 2 | Code | `wandb.login()` |
-| 3 | Markdown | **파이프라인 아키텍처 설명** (한국어) — 전체 흐름도, 각 컴포넌트 역할 |
-| 4 | Markdown | **사전 준비 사항** — GitHub PAT 발급, W&B Webhook 설정, Streamlit Cloud 연동 가이드 |
-| 5 | Code | **Registry 현황 조회** — `wandb.Api()`로 등록된 모델 목록 + 현재 alias 확인 |
-| 6 | Code | **모델 성능 비교** — staging 모델들의 메트릭을 `wandb.Table`로 비교하여 승격 대상 선정 |
-| 7 | Code | **"production" 승격 실행** — 선택한 모델 버전에 "production" alias 추가 |
-| 8 | Code | **Automation 트리거 확인** — GitHub Actions API로 워크플로우 실행 상태 확인 |
-| 9 | Code | **배포 상태 확인** — Streamlit 앱 URL 헬스체크 + deployment.json 내용 확인 |
-| 10 | Code | **배포 이력 로깅** — 배포 이벤트를 wandb run으로 기록 |
-| 11 | Markdown | **롤백 가이드** — 이전 버전을 "production"으로 재승격하는 방법 |
-| 12 | Code | **롤백 실행 예시** — 이전 버전 Artifact에 "production" alias 이동 |
+| 셀 | 내용 |
+|----|------|
+| Markdown | 자동 배포 파이프라인 아키텍처 + 사전 준비 가이드 |
+| Code | **Registry 현황 조회** — 등록된 모델/버전/alias 확인 |
+| Code | **"production" 승격 실행** — W&B Automation이 Webhook 트리거 |
+| Code | **GitHub Actions 실행 상태 확인** — 워크플로우 실행 여부 조회 |
+| Code | **배포 상태 확인** — deployment.json 조회 |
+| Markdown | **롤백 가이드** |
+| Code | **롤백 실행 예시** (주석 처리) |
 
 #### 핵심 코드 — 모델 승격
 
@@ -596,17 +608,17 @@ import wandb
 api = wandb.Api()
 
 # Registry에 등록된 모델 조회
-collections = api.artifact_type("model", project="wandb-e2e-demo-image-classification").collections()
+collections = api.artifact_type("model", project=f"{WANDB_ENTITY}/{WANDB_PROJECT}").collections()
 for c in collections:
     print(f"Model: {c.name}")
     for v in c.versions():
         print(f"  {v.version} aliases={v.aliases}")
 
 # staging → production 승격
-artifact = api.artifact("my-entity/wandb-e2e-demo-image-classification/cifar10-classifier:v3")
+artifact = api.artifact(f"{WANDB_ENTITY}/{WANDB_PROJECT}/cifar10-classifier:latest")
 artifact.aliases.append("production")
 artifact.save()
-print(f"✅ {artifact.name}:{artifact.version} → production 승격 완료")
+print(f"{artifact.name}:{artifact.version} → production 승격 완료")
 # 이 시점에서 W&B Automation이 GitHub Actions Webhook을 트리거
 ```
 
@@ -615,12 +627,9 @@ print(f"✅ {artifact.name}:{artifact.version} → production 승격 완료")
 ```python
 import requests
 
-GITHUB_TOKEN = "..."  # userdata.get('GITHUB_PAT')
-REPO = "owner/wandb-e2e-demo"
-
 resp = requests.get(
-    f"https://api.github.com/repos/{REPO}/actions/runs",
-    headers={"Authorization": f"Bearer {GITHUB_TOKEN}"},
+    f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs",
+    headers={"Authorization": f"Bearer {GITHUB_PAT}"},
     params={"event": "repository_dispatch", "per_page": 3}
 )
 for run in resp.json()["workflow_runs"]:
@@ -815,12 +824,14 @@ Pillow>=10.0.0
 
 ### 데모 시나리오 흐름 (라이브 데모용)
 
+**하나의 노트북으로 풀 플로우 데모** (권장):
+
 ```
-① [Colab] 1~6번 노트북 중 하나로 학습 완료, 모델이 Registry에 "staging"으로 등록됨
+① [Colab] 노트북 상단: 학습 → 실험 추적 → Sweep → Report → Model Registry "staging" 등록
       ↓
 ② [W&B UI] Model Registry에서 모델 메트릭 확인 (청중과 함께 리뷰)
       ↓
-③ [Colab] automations.ipynb에서 해당 모델을 "production"으로 승격
+③ [Colab] 같은 노트북 하단 Automations 섹션에서 "production"으로 승격
       ↓
 ④ [W&B UI] Automations 탭에서 Webhook 발동 로그 확인
       ↓
@@ -828,7 +839,7 @@ Pillow>=10.0.0
       ↓
 ⑥ [Streamlit] 앱이 자동 재배포 → 새 모델 정보 표시 → 이미지 업로드하여 추론 테스트
       ↓
-⑦ (선택) 롤백 시연 — 이전 버전을 다시 "production"으로 → 파이프라인 재실행
+⑦ (선택) 같은 노트북에서 롤백 시연 — 이전 버전을 다시 "production"으로 → 파이프라인 재실행
 ```
 
 ---
@@ -836,13 +847,15 @@ Pillow>=10.0.0
 ## 구현 순서 요약
 
 ```
-1. Image Classification  ← 기본 템플릿 수립, W&B 전 기능 커버
-2. Image Segmentation    ← 마스크 오버레이 시각화
-3. Image Detection       ← BBox 시각화, YOLOv8 연동
-4. Video Classification  ← 비디오 매체 로깅
-5. LLM Fine-tuning       ← QLoRA, HF Trainer 통합
-6. Image Generation      ← 생성 모델, 이미지 품질 추적
-7-8. Automations + Streamlit App ← Registry→GitHub Actions→Streamlit Cloud 자동 배포 파이프라인
+1. Image Classification  ← 기본 템플릿 수립, W&B 전 기능 + Automations 풀 플로우 커버
+2. Image Segmentation    ← 마스크 오버레이 시각화 + Automations
+3. Image Detection       ← BBox 시각화, YOLOv8 연동 + Automations
+4. Video Classification  ← 비디오 매체 로깅 + Automations
+5. LLM Fine-tuning       ← QLoRA, HF Trainer 통합 + Automations
+6. Image Generation      ← 생성 모델, 이미지 품질 추적 + Automations
 ```
 
-1~6은 독립 실행 가능. 7-8은 1~6에서 등록한 모델을 활용하며, 하나의 통합 파이프라인으로 구현한다.
+- 각 노트북은 **독립 실행 가능**하며, 학습부터 자동 배포까지 하나의 노트북으로 풀 플로우를 커버한다.
+- Automations(승격/배포 확인/롤백) 코드는 각 노트북 하단에 통합되어 있다.
+- GitHub Actions 워크플로우(`.github/workflows/deploy-on-promotion.yml`)와 Streamlit 앱(`models/app/`)은 공통 인프라로 유지한다.
+- 별도의 `models/automations/automations.ipynb`도 여러 모델 비교/승격 허브로 사용 가능하다.
