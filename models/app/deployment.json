@@ -1,8 +1,8 @@
 {
   "model_name": "coco128-vision",
-  "model_version": "v1",
-  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/coco128-vision:v1",
-  "deployed_at": "2026-02-20T13:44:57Z",
+  "model_version": "v4",
+  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/coco128-vision:v4",
+  "deployed_at": "2026-02-20T14:06:54Z",
   "deployed_by": "github-actions",
   "model_type": "yolo-seg",
   "best_mAP50": 0.0,
