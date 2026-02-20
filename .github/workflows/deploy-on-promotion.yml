@@ -81,10 +81,9 @@ jobs:
 
           metadata = artifact.metadata
           print(f"\nModel type: {metadata.get('model_type', 'unknown')}")
-          print(f"Accuracy: {metadata.get('best_val_acc', 'N/A')}")
+          print(f"mAP50: {metadata.get('best_mAP50', 'N/A')}")
+          print(f"mAP50 (mask): {metadata.get('best_mAP50_mask', 'N/A')}")
 
-          # 실제 artifact 경로 (버전 고정)
-          # artifact.name이 "name:v0" 형식일 수 있으므로 버전 부분 제거
           artifact_name = artifact.name.split(":")[0]
           resolved_path = f"{artifact.entity}/{artifact.project}/{artifact_name}:{artifact.version}"
           print(f"Resolved path: {resolved_path}")
@@ -92,9 +91,8 @@ jobs:
           info = {
               "model_name": collection,
               "model_type": metadata.get("model_type", "unknown"),
-              "best_val_acc": metadata.get("best_val_acc"),
-              "best_mean_iou": metadata.get("best_mean_iou"),
               "best_mAP50": metadata.get("best_mAP50"),
+              "best_mAP50_mask": metadata.get("best_mAP50_mask"),
               "num_classes": metadata.get("num_classes"),
               "resolved_path": resolved_path,
               "version": artifact.version,
@@ -122,9 +120,8 @@ jobs:
               "deployed_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
               "deployed_by": "github-actions",
               "model_type": info.get("model_type", "unknown"),
-              "best_val_acc": info.get("best_val_acc"),
-              "best_mean_iou": info.get("best_mean_iou"),
               "best_mAP50": info.get("best_mAP50"),
+              "best_mAP50_mask": info.get("best_mAP50_mask"),
               "trigger": "wandb-automation",
           }
 
