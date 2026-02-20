@@ -1,11 +1,11 @@
 {
-  "model_name": "none",
-  "model_version": "none",
-  "artifact_path": "none",
-  "deployed_at": "none",
-  "deployed_by": "none",
-  "model_type": "none",
-  "best_mAP50": null,
-  "best_mAP50_mask": null,
-  "trigger": "none"
+  "model_name": "coco128-vision",
+  "model_version": "v1",
+  "artifact_path": "wandb32/wandb-registry-Hyunwoo Model/coco128-vision:v1",
+  "deployed_at": "2026-02-20T13:24:25Z",
+  "deployed_by": "github-actions",
+  "model_type": "yolo-seg",
+  "best_mAP50": 0.0,
+  "best_mAP50_mask": 0.0,
+  "trigger": "wandb-automation"
 }
