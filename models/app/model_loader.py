@@ -27,7 +27,7 @@ def _create_deeplabv3_mobilenetv3(num_classes=3):
     weights=None으로 빈 모델을 만든 뒤 state_dict를 로드해야 한다.
     학습 노트북과 동일한 아키텍처를 재현한다.
     """
-    model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=21)
+    model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=21, aux_loss=True)
     model.classifier[-1] = nn.Conv2d(256, num_classes, kernel_size=1)
     model.aux_classifier[-1] = nn.Conv2d(10, num_classes, kernel_size=1)
     return model
