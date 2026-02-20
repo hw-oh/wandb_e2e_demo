@@ -30,7 +30,10 @@ is_deployed = deploy_info.get("model_name", "none") != "none"
 # --- 사이드바 ---
 with st.sidebar:
     st.header("설정")
-    model_type = st.selectbox("모델 유형", ["Classification", "Segmentation", "Detection"])
+    _type_options = ["Classification", "Segmentation", "Detection"]
+    _deployed_type = deploy_info.get("model_type", "classification").lower()
+    _default_idx = {"classification": 0, "segmentation": 1, "detection": 2}.get(_deployed_type, 0)
+    model_type = st.selectbox("모델 유형", _type_options, index=_default_idx)
     st.markdown("---")
     if is_deployed:
         parts = deploy_info.get("artifact_path", "").split("/")

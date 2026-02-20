@@ -6,5 +6,7 @@
   "deployed_by": "github-actions",
   "model_type": "segmentation",
   "best_val_acc": null,
+  "best_mean_iou": null,
+  "best_mAP50": null,
   "trigger": "wandb-automation"
 }

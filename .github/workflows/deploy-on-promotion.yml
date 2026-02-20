@@ -93,6 +93,8 @@ jobs:
               "model_name": collection,
               "model_type": metadata.get("model_type", "unknown"),
               "best_val_acc": metadata.get("best_val_acc"),
+              "best_mean_iou": metadata.get("best_mean_iou"),
+              "best_mAP50": metadata.get("best_mAP50"),
               "num_classes": metadata.get("num_classes"),
               "resolved_path": resolved_path,
               "version": artifact.version,
@@ -121,6 +123,8 @@ jobs:
               "deployed_by": "github-actions",
               "model_type": info.get("model_type", "unknown"),
               "best_val_acc": info.get("best_val_acc"),
+              "best_mean_iou": info.get("best_mean_iou"),
+              "best_mAP50": info.get("best_mAP50"),
               "trigger": "wandb-automation",
           }
 
